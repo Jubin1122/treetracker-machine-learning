@@ -79,9 +79,9 @@ class Sagemaker_Imnet_Dataset(Dataset):
         print ("Shuffled label preview")
         print (self.labels_df.sample(frac=1).head(5))
         print (self.labels_df.shape)
-        self.classes = self.labels_df.loc[:, ["class"]].unique().values
+        self.classes = np.unique(self.labels_df.loc[:, ["class"]])
         self.class_idxs = dict(zip(self.classes, [i for i in range(len(self.classes))]))
-        self.one_hot_classes = nn.functional.one_hot(self.classes)
+        self.one_hot_classes = nn.functional.one_hot(torch.as_tensor(list(self.class_idxs.values()), dtype=torch.int64).squeeze())
     
     def label_encode(self, row):
         '''
@@ -90,8 +90,14 @@ class Sagemaker_Imnet_Dataset(Dataset):
         '''
         class_label, bbox, is_tree = row["class"], row["bbox"], row["is_tree"]
         #TODO: PyTorch conversion
-        bbox = torch.as_tensor(bbox, dtype=torch.half) # bbox coordinates to 16-point float
-        is_tree = torch.as_tensor(is_tree, dtype=torch.uint8) # binary 0 1
+        if type(bbox) != str or type(bbox) != tuple:
+            bbox = (0,0,0,0)
+        else:     
+            if type(bbox) == str:
+                bbox = bbox[1:-1].split(",")
+            bbox = [int(coord) for coord in bbox]
+        bbox = torch.as_tensor(bbox, dtype=torch.int64) # bbox coordinates to 16-point float
+        is_tree = torch.as_tensor([is_tree], dtype=torch.uint8).squeeze() # binary 0 1
         class_label = self.one_hot_classes[self.class_idxs[class_label], :]
         return class_label, bbox, is_tree
     

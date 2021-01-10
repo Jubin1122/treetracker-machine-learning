@@ -136,8 +136,8 @@ def image_augmentation(img):
     
 def save_from_dataframe(df, output_dir):
     '''
-    Take a DataFrames produced by create_path_lists above and generates directories. Sagemaker transfers the contents of this local directory upon job 
-    completion to S3. 
+    Take a DataFrames produced by create_path_lists above and generates directories. Sagemaker transfers the contents of this local 
+    directory upon job completion to S3. 
     
     @param df (pd.DataFrame): DataFrame containing columns ["class", "full_path"]
     @param output_dir (str): Path to save output to 
@@ -157,16 +157,17 @@ def save_from_dataframe(df, output_dir):
             saved_images[name] = os.path.join(class_output_path, name + ".jpg")
     saved_images = pd.DataFrame.from_dict(saved_images, orient="index")
     saved_images.columns = ["path"]
-    df.loc[:, ["class", "bbox", "is_tree"]].to_csv(os.path.join(output_dir, "labels.csv"))
-    return saved_images.join(df)
+    saved_images = saved_images.join(df)
+    saved_images.loc[:, ["class", "bbox", "is_tree"]].to_csv(os.path.join(output_dir, "labels.csv"))
+    return saved_images
     
     
         
 
 def augment_from_dataframe(df, output_dir, suffix="_ aug"):
     '''
-    Perform augmentation similar to save_from_dataframe but with a suffix for augmented images and a predefined subsampling of images to augment, if 
-    desirable. 
+    Perform augmentation similar to save_from_dataframe but with a suffix for augmented images and a predefined subsampling of images to 
+    augment, if desirable. 
     
     @param df (pd.DataFrame): DataFrame containing columns ["class", "full_path"]
     @param output_dir (str): Path to save output to 
@@ -184,7 +185,11 @@ def augment_from_dataframe(df, output_dir, suffix="_ aug"):
             img = Image.open(row.full_path)
             img = image_augmentation(img)
             img.save(os.path.join(class_output_path, name + suffix + ".jpg"))
-            augmented_images[name ] = os.path.join(class_output_path, name + suffix + ".jpg")
+            augmented_images[name] = os.path.join(class_output_path, name + suffix + ".jpg")
+            labels = df[name]
+            # Transform labels if necessary, e.g. bounding box
+            
+            
     # Augmented labels should be same as training labels, so no DF saved
     return None
 
