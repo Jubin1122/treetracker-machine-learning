@@ -77,6 +77,8 @@ def create_path_lists(input_path, val_split, test_split, seed=42):
     @param val_split (float): Portion of total dataset to use as left-out validation  (between 0 and 1)
     @param test_split(float): Portion of total dataset to use as test set (between 0 and 1)
     @param seed(int): Random seed for reproducing splits in the future
+    
+    @return tuple(pd.DataFrame): train, validation, and test DataFrames 
     '''
     classes = SYNSETS.keys()
     imgs = {}
@@ -122,7 +124,7 @@ def image_transform(img):
     TODO: define some image transform 
     @param (PIL Image)
     '''
-    img = img.resize((64, 64)) 
+    img = img.resize((128, 128)) 
     return img
     
 
@@ -130,7 +132,7 @@ def image_augmentation(img):
     '''
     TODO: define some image augmentations based on class imbalances
     '''
-    img = img.resize((64, 64))  
+    img = img.resize((128, 128))  
     img += np.random.normal(0, 1, (img.size[0], img.size[1], 3)) # num channels should be 3
     return Image.fromarray(np.uint8(img))
     
@@ -180,14 +182,17 @@ def augment_from_dataframe(df, output_dir, suffix="_ aug"):
         class_output_path = os.path.join(output_dir, class_name)
         if not os.path.exists(class_output_path):
             raise ValueError("This class hasn't been created yet un-augmented.")
-        for row in df.itertuples():
+        for row in df.itertuples(): 
             name = row.Index
             img = Image.open(row.full_path)
             img = image_augmentation(img)
-            img.save(os.path.join(class_output_path, name + suffix + ".jpg"))
-            augmented_images[name] = os.path.join(class_output_path, name + suffix + ".jpg")
-            labels = df[name]
-            # Transform labels if necessary, e.g. bounding box
+            newpath = os.path.join(class_output_path, name + suffix + ".jpg")
+            img.save(newpath)
+            labels =  row.class, row.bbox, row.is_tree
+            augmented_images[name + suffix] = (labels[0], labels[1], labels[2], newpath)
+        augmented_images = pd.DataFrame.from_dict(augmented_images, orient="index")
+        augmented_images.columns = ["class", "bbox", "is_tree", "fullpath"]
+        augmented_images.loc[:, ["class", "bbox", "is_tree"]].to_csv(os.path.join(output_dir, "labels.csv"), mode='a')
             
             
     # Augmented labels should be same as training labels, so no DF saved

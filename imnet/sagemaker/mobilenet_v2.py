@@ -38,6 +38,12 @@ import io
 import pandas as pd
 
 
+# Preprocessing specific to Mobilenet dataloader
+mobilenet_preprocessing = transforms.Compose([
+    transforms.Resize((128, 128)),
+    transforms.ToTensor(),
+    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+])
 
 
 # Helper functions
@@ -61,7 +67,7 @@ def iou(box_a, box_b):
   return area_intersect / union
 
 class Sagemaker_Imnet_Dataset(Dataset):
-    def __init__(self, path):
+    def __init__(self, path, transforms=None):
         super().__init__()
         OK_FORMATS = [".jpg", ".png"]
         self.basepath = path
@@ -79,6 +85,7 @@ class Sagemaker_Imnet_Dataset(Dataset):
         print ("Shuffled label preview")
         print (self.labels_df.sample(frac=1).head(5))
         print (self.labels_df.shape)
+        self.transforms = transforms
         self.classes = np.unique(self.labels_df.loc[:, ["class"]])
         self.class_idxs = dict(zip(self.classes, [i for i in range(len(self.classes))]))
         self.one_hot_classes = nn.functional.one_hot(torch.as_tensor(list(self.class_idxs.values()), dtype=torch.int64).squeeze())
@@ -110,7 +117,9 @@ class Sagemaker_Imnet_Dataset(Dataset):
         class_label, bbox, is_tree = self.label_encode(row)
         img = np.array(Image.open(self.images[idx]))
         labels = {"species": class_label, "bbox": bbox, "is_tree": is_tree}
-        return torch.as_tensor(img), labels
+        if self.transforms is not None:
+            img = self.transforms(img)
+        return img, labels
     
     def __len__(self):
         return len(self.images)
@@ -220,8 +229,8 @@ class ModelTrainer():
             # Define data loader for training and validation
         self.batch_size = args.batch_size
         self.model_savepath = args.model_dir
-        dataset = Sagemaker_Imnet_Dataset(os.environ["SM_CHANNEL_TRAINING"])
-        val_dataset = Sagemaker_Imnet_Dataset(os.environ["SM_CHANNEL_VALIDATION"])
+        dataset = Sagemaker_Imnet_Dataset(os.environ["SM_CHANNEL_TRAINING"], transforms=MOBILENET_PREPROCESSING)
+        val_dataset = Sagemaker_Imnet_Dataset(os.environ["SM_CHANNEL_VALIDATION"], tranforms=MOBILENET_PREPROCESSING)
         
         self.data_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, sampler=None,
                                       batch_sampler=None, num_workers=args.n_workers, collate_fn=None,
