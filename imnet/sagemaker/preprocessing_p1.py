@@ -117,22 +117,31 @@ def create_path_lists(input_path, val_split, test_split, seed=42):
     return imgs.iloc[nontest_idxs, :][train_idxs], imgs.iloc[nontest_idxs, :][val_idxs], imgs[test_idxs]
 
 
+def bbox_transform(box, original_size, reshape_size):
+    '''
+    Given a box and a new size, return the transformed box
+    TODO: Verify this functions correctly
+    '''
+    scale = np.divide(original_size, reshape_size)
+    top_left = np.multiply(np.array(box[0], box[1]), scale)
+    bottom_right = np.multiply(np.array(box[0], box[1]), scale)
+    return (top_left[0], top_left[1], bottom_right[0], bottom_right[1])
     
         
-def image_transform(img):
+def image_transform(img, size=(128,128)):
     '''
     TODO: define some image transform 
     @param (PIL Image)
     '''
-    img = img.resize((128, 128)) 
+    img = img.resize(size) 
     return img
     
 
-def image_augmentation(img):
+def image_augmentation(img, size=(128,128)):
     '''
     TODO: define some image augmentations based on class imbalances
     '''
-    img = img.resize((128, 128))  
+    img = img.resize(size)  
     img += np.random.normal(0, 1, (img.size[0], img.size[1], 3)) # num channels should be 3
     return Image.fromarray(np.uint8(img))
     
@@ -154,13 +163,13 @@ def save_from_dataframe(df, output_dir):
         for row in df_subset.itertuples():
             name = row.Index
             img = Image.open(row.full_path)
-            img = image_transform(img)
+            img = image_transform(img, (128,128))
             img.save(os.path.join(class_output_path, name + ".jpg"))
-            saved_images[name] = os.path.join(class_output_path, name + ".jpg")
+            mod_bbox = bbox_transform(row.bbox, img.shape, (128,128))
+            saved_images[name] = (os.path.join(class_output_path, name + ".jpg"), row.class, mod_bbox, row.is_tree)
     saved_images = pd.DataFrame.from_dict(saved_images, orient="index")
-    saved_images.columns = ["path"]
-    saved_images = saved_images.join(df)
-    saved_images.loc[:, ["class", "bbox", "is_tree"]].to_csv(os.path.join(output_dir, "labels.csv"))
+    saved_images.columns = ["fullpath", "class", "bbox", "is_tree"]
+    saved_images.to_csv(os.path.join(output_dir, "labels.csv"))
     return saved_images
     
     
@@ -178,24 +187,21 @@ def augment_from_dataframe(df, output_dir, suffix="_ aug"):
     # decide on augmentation rule (balance classes, preserve class distro)
     augmented_images = {}
     for class_name in SYNSETS.keys():
-        df = df[df["class"] == class_name]
+        df_subset = df[df["class"] == class_name]
         class_output_path = os.path.join(output_dir, class_name)
         if not os.path.exists(class_output_path):
             raise ValueError("This class hasn't been created yet un-augmented.")
-        for row in df.itertuples(): 
+        for row in df_subset.itertuples(): 
             name = row.Index
             img = Image.open(row.full_path)
-            img = image_augmentation(img)
+            img = image_augmentation(img, (128,128))
             newpath = os.path.join(class_output_path, name + suffix + ".jpg")
             img.save(newpath)
-            labels =  row.class, row.bbox, row.is_tree
-            augmented_images[name + suffix] = (labels[0], labels[1], labels[2], newpath)
-        augmented_images = pd.DataFrame.from_dict(augmented_images, orient="index")
-        augmented_images.columns = ["class", "bbox", "is_tree", "fullpath"]
-        augmented_images.loc[:, ["class", "bbox", "is_tree"]].to_csv(os.path.join(output_dir, "labels.csv"), mode='a')
-            
-            
-    # Augmented labels should be same as training labels, so no DF saved
+            mod_bbox = bbox_transform(labels.bbox, img.shape, (128,128))
+            augmented_images[name + suffix] = (newpath, row.class, mod_bbox, row.is_tree)
+    augmented_images = pd.DataFrame.from_dict(augmented_images, orient="index")
+    augmented_images.columns = ["fullpath", "class", "bbox", "is_tree"]
+    augmented_images.to_csv(os.path.join(output_dir, "labels.csv"), mode='a')
     return None
 
 def preprocess(args):
