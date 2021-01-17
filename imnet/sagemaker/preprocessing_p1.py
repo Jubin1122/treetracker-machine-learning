@@ -100,7 +100,7 @@ def create_path_lists(input_path, val_split, test_split, seed=42):
                 # later, we can modify this to change how non-tree species are classified. 
                     
     imgs = pd.DataFrame.from_dict(imgs, orient="index")
-    imgs.columns = ["class", "bbox", "is_tree", "full_path", "annotation_path"]
+    imgs.columns = ["species", "bbox", "is_tree", "full_path", "annotation_path"]
     print ("Img paths preview: ")
     print (imgs.head(5))
     total_size = imgs.shape[0]
@@ -123,8 +123,10 @@ def bbox_transform(box, original_size, reshape_size):
     TODO: Verify this functions correctly
     '''
     scale = np.divide(original_size, reshape_size)
-    top_left = np.multiply(np.array(box[0], box[1]), scale)
-    bottom_right = np.multiply(np.array(box[0], box[1]), scale)
+    if box is None:
+        return (0, 0, 0, 0)
+    top_left = np.multiply(np.array([box[0], box[1]]), scale).astype(np.int16)
+    bottom_right = np.multiply(np.array([box[2], box[3]]), scale).astype(np.int16)
     return (top_left[0], top_left[1], bottom_right[0], bottom_right[1])
     
         
@@ -141,22 +143,27 @@ def image_augmentation(img, size=(128,128)):
     '''
     TODO: define some image augmentations based on class imbalances
     '''
-    img = img.resize(size)  
-    img += np.random.normal(0, 1, (img.size[0], img.size[1], 3)) # num channels should be 3
-    return Image.fromarray(np.uint8(img))
+    
+    resized_img = img.resize(size)  
+    flip_or_mirror = np.random.uniform()
+    if flip_or_mirror < 0.5:
+        rot_img = resized_img.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+    else:
+        rot_img = resized_img.transpose(PIL.Image.FLIP_TOP_BOTTOM)
+    return Image.fromarray(np.uint8(rot_img))
     
 def save_from_dataframe(df, output_dir):
     '''
     Take a DataFrames produced by create_path_lists above and generates directories. Sagemaker transfers the contents of this local 
     directory upon job completion to S3. 
-    
-    @param df (pd.DataFrame): DataFrame containing columns ["class", "full_path"]
+    f
+    @param df (pd.DataFrame): DataFrame containing columns ["species", "full_path"]
     @param output_dir (str): Path to save output to 
     '''
     saved_images = {}
     for class_name in SYNSETS.keys():
         print ("Processing class ", class_name)  
-        df_subset = df[df["class"] == class_name]
+        df_subset = df[df["species"] == class_name]
         class_output_path = os.path.join(output_dir, class_name)
         if not os.path.exists(class_output_path):
             os.makedirs(class_output_path)
@@ -165,10 +172,10 @@ def save_from_dataframe(df, output_dir):
             img = Image.open(row.full_path)
             img = image_transform(img, (128,128))
             img.save(os.path.join(class_output_path, name + ".jpg"))
-            mod_bbox = bbox_transform(row.bbox, img.shape, (128,128))
-            saved_images[name] = (os.path.join(class_output_path, name + ".jpg"), row.class, mod_bbox, row.is_tree)
+            mod_bbox = bbox_transform(row.bbox, img.size, (128,128))
+            saved_images[name] = (os.path.join(class_output_path, name + ".jpg"), row.species, mod_bbox, row.is_tree)
     saved_images = pd.DataFrame.from_dict(saved_images, orient="index")
-    saved_images.columns = ["fullpath", "class", "bbox", "is_tree"]
+    saved_images.columns = ["fullpath", "species", "bbox", "is_tree"]
     saved_images.to_csv(os.path.join(output_dir, "labels.csv"))
     return saved_images
     
@@ -180,14 +187,14 @@ def augment_from_dataframe(df, output_dir, suffix="_ aug"):
     Perform augmentation similar to save_from_dataframe but with a suffix for augmented images and a predefined subsampling of images to 
     augment, if desirable. 
     
-    @param df (pd.DataFrame): DataFrame containing columns ["class", "full_path"]
+    @param df (pd.DataFrame): DataFrame containing columns ["species", "full_path"]
     @param output_dir (str): Path to save output to 
     @param suffix (str): A suffix to identify augmented images in the output directory
     '''
     # decide on augmentation rule (balance classes, preserve class distro)
     augmented_images = {}
     for class_name in SYNSETS.keys():
-        df_subset = df[df["class"] == class_name]
+        df_subset = df[df["species"] == class_name]
         class_output_path = os.path.join(output_dir, class_name)
         if not os.path.exists(class_output_path):
             raise ValueError("This class hasn't been created yet un-augmented.")
@@ -197,10 +204,10 @@ def augment_from_dataframe(df, output_dir, suffix="_ aug"):
             img = image_augmentation(img, (128,128))
             newpath = os.path.join(class_output_path, name + suffix + ".jpg")
             img.save(newpath)
-            mod_bbox = bbox_transform(labels.bbox, img.shape, (128,128))
-            augmented_images[name + suffix] = (newpath, row.class, mod_bbox, row.is_tree)
+            mod_bbox = bbox_transform(row.bbox, img.size, (128,128))
+            augmented_images[name + suffix] = (newpath, row.species, mod_bbox, row.is_tree)
     augmented_images = pd.DataFrame.from_dict(augmented_images, orient="index")
-    augmented_images.columns = ["fullpath", "class", "bbox", "is_tree"]
+    augmented_images.columns = ["fullpath", "species", "bbox", "is_tree"]
     augmented_images.to_csv(os.path.join(output_dir, "labels.csv"), mode='a')
     return None
 

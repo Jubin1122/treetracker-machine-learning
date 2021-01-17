@@ -40,8 +40,7 @@ import pandas as pd
 
 # Preprocessing specific to Mobilenet dataloader
 mobilenet_preprocessing = transforms.Compose([
-    transforms.Resize((128, 128)),
-    transforms.ToTensor(),
+f    transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
@@ -86,8 +85,8 @@ class Sagemaker_Imnet_Dataset(Dataset):
         print (self.labels_df.sample(frac=1).head(5))
         print (self.labels_df.shape)
         self.transforms = transforms
-        self.classes = np.unique(self.labels_df.loc[:, ["class"]])
-        self.class_idxs = dict(zip(self.classes, [i for i in range(len(self.classes))]))
+        self.species = np.unique(self.labels_df.loc[:, ["species"]])
+        self.class_idxs = dict(zip(self.species, [i for i in range(len(self.species))]))
         self.one_hot_classes = nn.functional.one_hot(torch.as_tensor(list(self.class_idxs.values()), dtype=torch.int64).squeeze())
     
     def label_encode(self, row):
@@ -95,7 +94,7 @@ class Sagemaker_Imnet_Dataset(Dataset):
         Given a row of labels from the ImageNet database label DataFrame, convert to PyTorch tensors and
         one-hot encoding if necessary.
         '''
-        class_label, bbox, is_tree = row["class"], row["bbox"], row["is_tree"]
+        class_label, bbox, is_tree = row["species"], row["bbox"], row["is_tree"]
         #TODO: PyTorch conversion
         if type(bbox) != str or type(bbox) != tuple:
             bbox = (0,0,0,0)
