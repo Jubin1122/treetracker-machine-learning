@@ -139,19 +139,22 @@ def image_transform(img, size=(128,128)):
     return img
     
 
-def image_augmentation(img, size=(128,128)):
+def image_augmentation(img, bbox, size=(128,128)):
     '''
     TODO: define some image augmentations based on class imbalances
     '''
     
+    mod_bbox = bbox_transform(bbox, original_size=img.size, reshape_size=size)
     resized_img = img.resize(size)  
     flip_or_mirror = np.random.uniform()
     if flip_or_mirror < 0.5:
-        rot_img = resized_img.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+        rot_img = resized_img.transpose(Image.FLIP_LEFT_RIGHT)
+        mod_bbox = mod_bbox # TODO: Function for flipped bbox 
     else:
-        rot_img = resized_img.transpose(PIL.Image.FLIP_TOP_BOTTOM)
-    return Image.fromarray(np.uint8(rot_img))
-    
+        rot_img = resized_img.transpose(Image.FLIP_TOP_BOTTOM)
+        mod_bbox = mod_bbox # TODO: Function for flipped bbox
+    return rot_img, mod_bbox
+
 def save_from_dataframe(df, output_dir):
     '''
     Take a DataFrames produced by create_path_lists above and generates directories. Sagemaker transfers the contents of this local 
@@ -201,10 +204,9 @@ def augment_from_dataframe(df, output_dir, suffix="_ aug"):
         for row in df_subset.itertuples(): 
             name = row.Index
             img = Image.open(row.full_path)
-            img = image_augmentation(img, (128,128))
+            img, mod_bbox = image_augmentation(img, row.bbox, size=(128,128))
             newpath = os.path.join(class_output_path, name + suffix + ".jpg")
             img.save(newpath)
-            mod_bbox = bbox_transform(row.bbox, img.size, (128,128))
             augmented_images[name + suffix] = (newpath, row.species, mod_bbox, row.is_tree)
     augmented_images = pd.DataFrame.from_dict(augmented_images, orient="index")
     augmented_images.columns = ["fullpath", "species", "bbox", "is_tree"]

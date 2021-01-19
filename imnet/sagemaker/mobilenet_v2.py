@@ -40,7 +40,7 @@ import pandas as pd
 
 # Preprocessing specific to Mobilenet dataloader
 mobilenet_preprocessing = transforms.Compose([
-f    transforms.ToTensor(),
+    transforms.ToTensor(),
     transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
 ])
 
@@ -103,7 +103,9 @@ class Sagemaker_Imnet_Dataset(Dataset):
                 bbox = bbox[1:-1].split(",")
             bbox = [int(coord) for coord in bbox]
         bbox = torch.as_tensor(bbox, dtype=torch.int64) # bbox coordinates to 16-point float
-        is_tree = torch.as_tensor([is_tree], dtype=torch.uint8).squeeze() # binary 0 1
+        is_tree = np.zeros(2, dtype=np.int8)
+        is_tree[int(is_tree == "True")] = 1
+        is_tree = torch.as_tensor(is_tree, dtype=torch.uint8).squeeze() # binary 0 1
         class_label = self.one_hot_classes[self.class_idxs[class_label], :]
         return class_label, bbox, is_tree
     
@@ -229,7 +231,7 @@ class ModelTrainer():
         self.batch_size = args.batch_size
         self.model_savepath = args.model_dir
         dataset = Sagemaker_Imnet_Dataset(os.environ["SM_CHANNEL_TRAINING"], transforms=MOBILENET_PREPROCESSING)
-        val_dataset = Sagemaker_Imnet_Dataset(os.environ["SM_CHANNEL_VALIDATION"], tranforms=MOBILENET_PREPROCESSING)
+        val_dataset = Sagemaker_Imnet_Dataset(os.environ["SM_CHANNEL_VALIDATION"], transforms=MOBILENET_PREPROCESSING)
         
         self.data_loader = DataLoader(dataset, batch_size=self.batch_size, shuffle=True, sampler=None,
                                       batch_sampler=None, num_workers=args.n_workers, collate_fn=None,
@@ -442,7 +444,6 @@ if __name__ == '__main__':
     parser.add_argument('--num-gpus', type=int, default=os.environ['SM_NUM_GPUS'])
 
     MOBILENET_PREPROCESSING = transforms.Compose([
-        transforms.Resize((128, 128)),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
