@@ -105,7 +105,7 @@ class Sagemaker_Imnet_Dataset(Dataset):
         bbox = torch.as_tensor(bbox, dtype=torch.int64) # bbox coordinates to 16-point float
         is_tree = np.zeros(2, dtype=np.int8)
         is_tree[int(is_tree == "True")] = 1
-        is_tree = torch.as_tensor(is_tree, dtype=torch.uint8).squeeze() # binary 0 1
+        is_tree = torch.as_tensor(is_tree, dtype=torch.float16).squeeze() # binary 0 1
         class_label = self.one_hot_classes[self.class_idxs[class_label], :]
         return class_label, bbox, is_tree
     
@@ -185,7 +185,8 @@ def loss_spec(binary_label, binary_preds, bbox_coords, bbox_preds, binary_weight
     # TODO: Add positive weight to remedy class imbalance
     binary_detection_error = nn.BCEWithLogitsLoss()
     bounding_box_error = nn.MSELoss()
-    return binary_weight * binary_detection_error(binary_preds, binary_label) + (1-binary_weight) * bounding_box_error(bbox_preds, bbox_coords)
+    return binary_weight * binary_detection_error(binary_preds.float(), binary_label.float()) + \
+            (1-binary_weight) * bounding_box_error(bbox_preds.float(), bbox_coords.float())
 
 
 def model_fn(model_dir):
@@ -445,7 +446,7 @@ if __name__ == '__main__':
 
     MOBILENET_PREPROCESSING = transforms.Compose([
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+#         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
     args = parser.parse_args()
